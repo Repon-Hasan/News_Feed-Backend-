@@ -2,9 +2,10 @@ import { Router } from "express";
 import { authRouters } from "../auth/auth.router";
 import { reporterProfileRoutes } from "../reporter/profile/reporterProfile.routes";
 import { reporterRoutes } from "../reporter/news/reporter.routes";
-import { categoryRouter } from "../category/categories/category.router";
+
 import { adminRoutes } from "../admin/dashboard/admin.router";
 import { userRoutes } from "../user/user.routes";
+import { categoryRouter } from "../admin/categories/category.router";
 
 const router=Router()
 router.use('/auth',authRouters)

@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
 
 
-import { categoryService } from "./categories.service";
+
 import { catchAsync } from "../../shared/catchAsync";
 import { sendResponse } from "../../shared/sendResponse";
 import AppError from "../../errorHelpers/AppError";
+import { categoryService } from "./categories.service";
 
 
 
