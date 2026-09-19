@@ -341,6 +341,8 @@ const logoutUser = catchAsync(
             sameSite: "none",
             path: "/",
         });
+
+        
         CookieUtils.clearCookie(res, 'better-auth.session_token', {
             httpOnly: true,
             secure: envVars.NODE_ENV === "production",
