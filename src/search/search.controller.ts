@@ -1,29 +1,39 @@
-import { Controller, Get, Query } from '@nestjs/common';
-import { SearchService } from './search.service';
-import { Public } from '../common/decorators/public.decorator';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Request, Response } from "express";
+import status from "http-status";
 
-@ApiTags('Search')
-@Controller('v1/search')
-export class SearchController {
-  constructor(private readonly searchService: SearchService) {}
 
-  @Public()
-  @Get()
-  @ApiOperation({ summary: 'Global search articles by title, excerpt, content, or author' })
-  async search(
-    @Query('q') q = '',
-    @Query('category') category?: string,
-    @Query('tag') tag?: string,
-    @Query('page') page = '1',
-    @Query('limit') limit = '12',
-  ) {
-    return this.searchService.search(
-      q,
-      category,
-      tag,
-      parseInt(page, 10),
-      parseInt(limit, 10),
-    );
+import { searchService } from "./search.service";
+import { sendResponse } from "../shared/sendResponse";
+import { catchAsync } from "../shared/catchAsync";
+
+const searchArticles = catchAsync(
+  async (req: Request, res: Response) => {
+    const result = await searchService.searchArticles(req.query);
+
+    sendResponse(res, {
+      httpStatusCode: status.OK,
+      success: true,
+      message: "Search results retrieved successfully",
+      data: result,
+    });
   }
-}
+);
+
+const getSearchSuggestions = catchAsync(
+  async (req: Request, res: Response) => {
+    const result =
+      await searchService.getSearchSuggestions(req.query);
+
+    sendResponse(res, {
+      httpStatusCode: status.OK,
+      success: true,
+      message: "Search suggestions retrieved successfully",
+      data: result,
+    });
+  }
+);
+
+export const searchController = {
+  searchArticles,
+  getSearchSuggestions,
+};

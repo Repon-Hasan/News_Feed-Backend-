@@ -9,7 +9,13 @@ cloudinary.config({
     api_secret: envVars.CLOUDINARY.CLOUDINARY_API_SECRET,
 })
 
-
+cloudinary.api.ping()
+  .then((result) => {
+    console.log("CLOUDINARY CONNECTION:", result);
+  })
+  .catch((error) => {
+    console.error("CLOUDINARY CONNECTION ERROR:", error);
+  });
 export const uploadFileToCloudinary = async (
     buffer : Buffer,
     fileName: string,
@@ -44,13 +50,20 @@ export const uploadFileToCloudinary = async (
         cloudinary.uploader.upload_stream(
             {
                 resource_type: "auto",
-                public_id: `ai-recruiter/${folder}/${uniqueName}`,
-                folder : `ai-recruiter/${folder}`,
+                public_id: `news/${folder}/${uniqueName}`,
+                folder : `articles/${folder}`,
             },
             (error, result) => {
-                if(error){
-                    return reject(new AppError(status.INTERNAL_SERVER_ERROR, "Failed to upload file to Cloudinary"));
-                }
+           if (error) {
+  //console.error("CLOUDINARY UPLOAD ERROR:", error);
+
+  return reject(
+    new AppError(
+      status.INTERNAL_SERVER_ERROR,
+      error.message || "Failed to upload file to Cloudinary"
+    )
+  );
+}
                 resolve(result as UploadApiResponse);
             }
         ).end(buffer);

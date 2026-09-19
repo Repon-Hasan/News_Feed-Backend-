@@ -372,36 +372,55 @@ const logoutUser = catchAsync(
 // ==========================================
 // Reset Password
 // ==========================================
-const resetPassword = catchAsync(
-  async (req: Request, res: Response) => {
-    const {
-      email,
-      otp,
-      newPassword,
-    } = req.body;
 
-    if (
-      !email ||
-      !otp ||
-      !newPassword
-    ) {
-      throw new AppError(
-        status.BAD_REQUEST,
-        "Email, OTP and new password are required"
-      );
-    }
 
-    await authServices.requestPasswordReset(
-      email,
-    );
+// auth.controller.ts
 
-    sendResponse(res, {
-      httpStatusCode: status.OK,
-      success: true,
-      message: "Password reset successfully",
-    });
-  }
-);
+const resetPassword = catchAsync(async (req: Request, res: Response) => {
+  const { email, password } = req.body;
+
+  const result = await authServices.resetPassword(email, password);
+
+  // // Clear all authentication cookies
+  // res.clearCookie("accessToken", {
+  //   httpOnly: true,
+  //   secure: process.env.NODE_ENV === "production",
+  //   sameSite: "lax",
+  //   path: "/",
+  // });
+
+  // res.clearCookie("refreshToken", {
+  //   httpOnly: true,
+  //   secure: process.env.NODE_ENV === "production",
+  //   sameSite: "lax",
+  //   path: "/",
+  // });
+
+  // // Better Auth session cookie
+  // res.clearCookie("better-auth.session_token", {
+  //   httpOnly: true,
+  //   secure: process.env.NODE_ENV === "production",
+  //   sameSite: "lax",
+  //   path: "/",
+  // });
+
+  sendResponse(res, {
+    httpStatusCode: status.OK,
+    success: true,
+    message:
+      "Password reset successfully. All previous sessions have been logged out.",
+    data: result,
+  });
+});
+
+
+// auth.services.ts
+
+
+
+
+
+
 
 
 // ==========================================

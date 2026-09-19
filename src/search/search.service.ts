@@ -1,63 +1,371 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { ArticleStatus } from '@prisma/client';
+import { Prisma } from "../generated/prisma/client";
+import { prisma } from "../lib/prisma";
 
-@Injectable()
-export class SearchService {
-  constructor(private readonly prisma: PrismaService) {}
 
-  async search(query: string, category?: string, tag?: string, page = 1, limit = 12) {
-    const pageNum = Math.max(1, Number(page) || 1);
-    const limitNum = Math.max(1, Math.min(50, Number(limit) || 12));
-    const skip = (pageNum - 1) * limitNum;
+const searchArticles = async (query: any) => {
+  const search =
+    typeof query.search === "string"
+      ? query.search.trim()
+      : "";
 
-    const trimmed = (query || '').trim();
+  const categoryId =
+    typeof query.categoryId === "string"
+      ? query.categoryId
+      : undefined;
 
-    const where: any = {
-      status: ArticleStatus.PUBLISHED,
-    };
+  const subcategoryId =
+    typeof query.subcategoryId === "string"
+      ? query.subcategoryId
+      : undefined;
 
-    if (trimmed) {
-      where.OR = [
-        { title: { contains: trimmed, mode: 'insensitive' } },
-        { excerpt: { contains: trimmed, mode: 'insensitive' } },
-        { content: { contains: trimmed, mode: 'insensitive' } },
-        { author: { name: { contains: trimmed, mode: 'insensitive' } } },
-      ];
-    }
+  const tag =
+    typeof query.tag === "string"
+      ? query.tag.trim()
+      : undefined;
 
-    if (category) {
-      where.category = { slug: category };
-    }
+  const authorId =
+    typeof query.authorId === "string"
+      ? query.authorId
+      : undefined;
 
-    if (tag) {
-      where.tags = { some: { tag: { slug: tag } } };
-    }
+  const page = Math.max(
+    Number(query.page) || 1,
+    1
+  );
 
-    const [total, items] = await Promise.all([
-      this.prisma.article.count({ where }),
-      this.prisma.article.findMany({
-        where,
-        skip,
-        take: limitNum,
-        orderBy: { publishedAt: 'desc' },
-        include: {
-          category: true,
-          author: { select: { id: true, name: true, image: true } },
-          tags: { include: { tag: true } },
+  const limit = Math.min(
+    Math.max(Number(query.limit) || 10, 1),
+    50
+  );
+
+  const skip = (page - 1) * limit;
+
+  const sort =
+    typeof query.sort === "string"
+      ? query.sort
+      : "latest";
+
+  const where: Prisma.ArticleWhereInput = {
+    status: "PUBLISHED",
+  };
+
+  // =========================
+  // SEARCH TEXT
+  // =========================
+
+  if (search) {
+    where.OR = [
+      {
+        title: {
+          contains: search,
+          mode: "insensitive",
         },
-      }),
-    ]);
+      },
+      {
+        excerpt: {
+          contains: search,
+          mode: "insensitive",
+        },
+      },
+      {
+        content: {
+          contains: search,
+          mode: "insensitive",
+        },
+      },
+      {
+        category: {
+          name: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+      },
+      {
+        subcategory: {
+          name: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+      },
+      {
+        author: {
+          name: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+      },
+      {
+        tags: {
+          some: {
+            tag: {
+              name: {
+                contains: search,
+                mode: "insensitive",
+              },
+            },
+          },
+        },
+      },
+    ];
+  }
 
-    return {
-      query: trimmed,
-      items,
-      pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total,
-        totalPages: Math.ceil(total / limitNum),
+  // =========================
+  // CATEGORY FILTER
+  // =========================
+
+  if (categoryId) {
+    where.categoryId = categoryId;
+  }
+
+  // =========================
+  // SUBCATEGORY FILTER
+  // =========================
+
+  if (subcategoryId) {
+    where.subcategoryId = subcategoryId;
+  }
+
+  // =========================
+  // TAG FILTER
+  // =========================
+
+  if (tag) {
+    where.tags = {
+      some: {
+        tag: {
+          OR: [
+            {
+              name: {
+                equals: tag,
+                mode: "insensitive",
+              },
+            },
+            {
+              slug: {
+                equals: tag,
+                mode: "insensitive",
+              },
+            },
+          ],
+        },
       },
     };
   }
-}
+
+  // =========================
+  // AUTHOR FILTER
+  // =========================
+
+  if (authorId) {
+    where.authorId = authorId;
+  }
+
+  // =========================
+  // SORTING
+  // =========================
+
+  let orderBy: Prisma.ArticleOrderByWithRelationInput;
+
+  switch (sort) {
+    case "oldest":
+      orderBy = {
+        publishedAt: "asc",
+      };
+      break;
+
+    case "most-viewed":
+      orderBy = {
+        views: "desc",
+      };
+      break;
+
+    case "latest":
+    default:
+      orderBy = {
+        publishedAt: "desc",
+      };
+      break;
+  }
+
+  // =========================
+  // DATABASE QUERY
+  // =========================
+
+  const [articles, total] = await Promise.all([
+    prisma.article.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy,
+
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            reporterProfile: {
+              select: {
+                designation: true,
+                isVerified: true,
+              },
+            },
+          },
+        },
+
+        category: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
+        },
+
+        subcategory: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
+        },
+
+        images: {
+          orderBy: {
+            order: "asc",
+          },
+        },
+
+        tags: {
+          include: {
+            tag: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+              },
+            },
+          },
+        },
+
+        _count: {
+          select: {
+            comments: true,
+            likes: true,
+            bookmarks: true,
+            articleViews: true,
+          },
+        },
+      },
+    }),
+
+    prisma.article.count({
+      where,
+    }),
+  ]);
+
+  return {
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage:
+        page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1,
+    },
+
+    filters: {
+      search: search || null,
+      categoryId: categoryId || null,
+      subcategoryId: subcategoryId || null,
+      tag: tag || null,
+      authorId: authorId || null,
+      sort,
+    },
+
+    data: articles,
+  };
+};
+
+// ======================================
+// SEARCH SUGGESTIONS
+// ======================================
+
+const getSearchSuggestions = async (query: any) => {
+  const search =
+    typeof query.search === "string"
+      ? query.search.trim()
+      : "";
+
+  if (!search) {
+    return [];
+  }
+
+  const [articles, categories, tags] =
+    await Promise.all([
+      prisma.article.findMany({
+        where: {
+          status: "PUBLISHED",
+          title: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+        select: {
+          id: true,
+          title: true,
+          slug: true,
+          coverImage: true,
+        },
+        take: 5,
+        orderBy: {
+          publishedAt: "desc",
+        },
+      }),
+
+      prisma.category.findMany({
+        where: {
+          isActive: true,
+          name: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+        take: 5,
+      }),
+
+      prisma.tag.findMany({
+        where: {
+          name: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+        take: 5,
+      }),
+    ]);
+
+  return {
+    articles,
+    categories,
+    tags,
+  };
+};
+
+export const searchService = {
+  searchArticles,
+  getSearchSuggestions,
+};

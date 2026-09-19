@@ -2,7 +2,6 @@ import status from "http-status";
 import {
   IChangePasswordPayload,
   ILoginUserPayload,
-  IRegisterPatientPayload,
   IRequestUser,
   IUpdateProfilePayload,
 } from "./auth.interface";
@@ -25,6 +24,13 @@ import { envVars } from "../config/env";
 // ==========================================
 // Register User
 // ==========================================
+interface IRegisterPatientPayload {
+  name: string;
+  email: string;
+  password: string;
+  role: Role;
+}
+
 const registerUser = async (
   payload: IRegisterPatientPayload,
   file?: Express.Multer.File
@@ -48,10 +54,6 @@ const registerUser = async (
   // ==========================================
   // 2. Create User with Better Auth
   // ==========================================
-  // IMPORTANT:
-  // Do NOT send role here.
-  // role has input: false in auth.ts
-  // Therefore every normal registration becomes USER.
   const data = await auth.api.signUpEmail({
     body: {
       name,
@@ -60,15 +62,7 @@ const registerUser = async (
       image: imageUrl,
     },
   });
-  
-await prisma.user.update({
-  where: {
-    id: data.user.id,
-  },
-  data: {
-    emailVerified: true,
-  },
-});
+
   if (!data.user) {
     throw new AppError(
       status.BAD_REQUEST,
@@ -78,23 +72,31 @@ await prisma.user.update({
 
   try {
     // ==========================================
-    // 3. Get User From Database
+    // 3. Update User Role
     // ==========================================
-    const user = await prisma.user.findUnique({
+    const user = await prisma.user.update({
       where: {
         id: data.user.id,
       },
+      data: {
+        role: payload.role,
+        emailVerified: true,
+      },
     });
 
-    if (!user) {
-      throw new AppError(
-        status.NOT_FOUND,
-        "User was not created"
-      );
+    // ==========================================
+    // 4. Create Reporter Profile
+    // ==========================================
+    if (payload.role === "REPORTER") {
+      await prisma.reporterProfile.create({
+        data: {
+          userId: user.id,
+        },
+      });
     }
 
     // ==========================================
-    // 4. Generate Access Token
+    // 5. Generate Access Token
     // ==========================================
     const accessToken = tokenUtils.getAccessToken({
       userId: user.id,
@@ -104,7 +106,7 @@ await prisma.user.update({
     });
 
     // ==========================================
-    // 5. Generate Refresh Token
+    // 6. Generate Refresh Token
     // ==========================================
     const refreshToken = tokenUtils.getRefreshToken({
       userId: user.id,
@@ -114,7 +116,7 @@ await prisma.user.update({
     });
 
     // ==========================================
-    // 6. Return
+    // 7. Return
     // ==========================================
     return {
       ...data,
@@ -124,7 +126,7 @@ await prisma.user.update({
   } catch (error) {
     console.log("Registration error:", error);
 
-    // Delete created user if token generation fails
+    // Delete created user if anything fails
     await prisma.user.delete({
       where: {
         id: data.user.id,
@@ -607,7 +609,15 @@ const updateProfile = async (
 // ==========================================
 // Request Password Reset OTP
 // ==========================================
-const requestPasswordReset = async (email: string) => {
+
+import { hashPassword } from "better-auth/crypto";
+// change path if needed
+
+const resetPassword = async (
+  email: string,
+  newPassword: string
+) => {
+  // 1. Find user
   const user = await prisma.user.findUnique({
     where: {
       email,
@@ -615,30 +625,57 @@ const requestPasswordReset = async (email: string) => {
   });
 
   if (!user) {
-    throw new AppError(
-      status.NOT_FOUND,
-      "User not found"
-    );
+    throw new AppError(status.NOT_FOUND, "User not found");
   }
 
+  // 2. Check account status
   if (!user.isActive) {
-    throw new AppError(
-      status.FORBIDDEN,
-      "User account is inactive"
-    );
+    throw new AppError(status.FORBIDDEN, "User account is inactive");
   }
 
-  await auth.api.requestPasswordReset({
-    body: {
-      email,
-      redirectTo: `${envVars.FRONTEND_URL}/reset-password`,
+  // 3. Find credentials account
+  const account = await prisma.account.findFirst({
+    where: {
+      userId: user.id,
+      providerId: "credential",
     },
   });
 
+  if (!account) {
+    throw new AppError(
+      status.NOT_FOUND,
+      "Password account not found"
+    );
+  }
+
+  // 4. Hash new password
+ const hashedPassword = await hashPassword(newPassword);
+
+  // 5. Update password + remove all sessions
+  await prisma.$transaction([
+    prisma.account.update({
+      where: {
+        id: account.id,
+      },
+      data: {
+        password: hashedPassword,
+      },
+    }),
+
+    prisma.session.deleteMany({
+      where: {
+        userId: user.id,
+      },
+    }),
+  ]);
+
   return {
-    message: "Password reset link sent successfully",
+    message: "Password updated successfully",
   };
 };
+
+
+
 
 
 
@@ -895,7 +932,7 @@ export const authServices = {
   changePassword,
   updateProfile,
   logoutUser,
-  requestPasswordReset,
+  resetPassword,
   googleLoginSuccess,
   changeUserStatus,
   deleteUser,

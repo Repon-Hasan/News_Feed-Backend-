@@ -8,7 +8,7 @@ import { Role } from "../generated/prisma/enums";
 
 const router=Router();
 
-router.post("/register",multerImageUpload.single("image"),authController.registerUser)
+router.post("/register",authController.registerUser)
 router.post("/login",authController.loginUser)
 router.get("/getMe",checkAuth(),authController.getUser)
 router.post("/refresh-token", authController.getNewToken)
