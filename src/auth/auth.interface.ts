@@ -36,8 +36,7 @@ export interface IUpdateProfilePayload {
 
 
 export interface IRequestUser{
-    candidateProfile: any;
-    id: any;
+    id: string;
     userId : string;
     role : Role;
     email : string;

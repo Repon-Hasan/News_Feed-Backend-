@@ -1,6 +1,4 @@
-
-import type { IRequestUser } from "../modules/Auth/auth.interface";
-
+import { IRequestUser } from "../auth/auth.interface";
 
 declare global {
     namespace Express{
@@ -10,4 +8,3 @@ declare global {
     }
 }
 
-export {};
