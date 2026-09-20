@@ -65,6 +65,10 @@ const getAllArticles = async (query: Record<string, unknown>) => {
   };
 };
 
+
+
+
+
 export const publicServices = {
   getAllArticles,
 };
